@@ -78,7 +78,8 @@ def lambda_handler(event, context):
             Body=jsonForStorage,
             Key='bill.json',
             Bucket='storageforbills')
-    # compressing jsonForStorage and storing it as
+            
+    # compressing jsonForStorage and storing it in the storageforbills bucket
     gzip.compress(jsonForStorage.encode('utf-8'))
     s3Client.put_object(
             ACL='private',
