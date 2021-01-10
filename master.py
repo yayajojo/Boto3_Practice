@@ -101,7 +101,7 @@ def lambda_handler(event, context):
         print("someting wrong when using bucket")
         raise error
     # fourth step:
-    # creating uncompressed bill.json and storing it in the bucket:storageforbills
+    # creating unzipped bill.json and storing it in the bucket:storageforbills
     gzip.compress(jsonForStorage.encode('utf-8'))
     s3Client.put_object(
         ACL='private',
