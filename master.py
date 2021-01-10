@@ -1,23 +1,25 @@
 import boto3
 import json
 import gzip
-
+import botocore
 
 def lambda_handler(event, context):
     # TODO implement
     billClient = boto3.client('ce')
     # connecting to cost explorer to get monthly(December) aws usage
-    billData = billClient.get_cost_and_usage(
-        TimePeriod={
-            'Start': '2020-12-01',
-            'End': '2021-01-01'
-        },
-        Granularity='MONTHLY',
-        Metrics=['UnblendedCost', 'UsageQuantity'],
-        GroupBy=[{'Type': 'DIMENSION', 'Key': 'SERVICE'},
-                 {'Type': 'DIMENSION', 'Key': 'USAGE_TYPE'}]
-    )
-
+    try:
+        billData = billClient.get_cost_and_usage(
+            TimePeriod={
+                'Start': '2020-12-01',
+                'End': '2021-01-01'
+            },
+            Granularity='MONTHLY',
+            Metrics=['UnblendedCost', 'UsageQuantity'],
+            GroupBy=[{'Type': 'DIMENSION', 'Key': 'SERVICE'},
+                     {'Type': 'DIMENSION', 'Key': 'USAGE_TYPE'}]
+        )
+    except botocore.exceptions.ClientError as error:
+        raise error
     # creating table bills for storing billData.
     dynamodb = boto3.resource('dynamodb')
     try:
@@ -41,35 +43,33 @@ def lambda_handler(event, context):
             }
         )
         table.meta.client.get_waiter('table_exists').wait(TableName='bills')
+        # putting items in the bills table
+        startDate = billData['ResultsByTime'][0]['TimePeriod']['Start']
+        endDate = billData['ResultsByTime'][0]['TimePeriod']['End']
+        services = billData['ResultsByTime'][0]['Groups']
+        billItem = 1
+        items = []
+        for service in services:
+            serviceName = service['Keys'][0]
+            serviceType = service['Keys'][1]
+            unblendedCost = service['Metrics']['UnblendedCost']
+            usageQuantity = service['Metrics']['UsageQuantity']
+            item = {
+                'billItemID': billItem,
+                'startDate': startDate,
+                'endDate': endDate,
+                'serviceName': serviceName,
+                'serviceType': serviceType,
+                'unblendedCost': unblendedCost,
+                'usageQuantity': usageQuantity
+            }
+            table.put_item(
+                Item=item
+            )
+            items.append(item)
+            billItem = billItem + 1
     except dynamodb.exceptions.ResourceInUseException:
-        table = dynamodb.Table('bills')
-    
-    # putting items in the bills table
-    startDate = billData['ResultsByTime'][0]['TimePeriod']['Start']
-    endDate = billData['ResultsByTime'][0]['TimePeriod']['End']
-    services = billData['ResultsByTime'][0]['Groups']
-    billItem = 1
-    items = []
-    for service in services:
-        serviceName = service['Keys'][0]
-        serviceType = service['Keys'][1]
-        unblendedCost = service['Metrics']['UnblendedCost']
-        usageQuantity = service['Metrics']['UsageQuantity']
-        item = {
-            'billItemID': billItem,
-            'startDate': startDate,
-            'endDate': endDate,
-            'serviceName': serviceName,
-            'serviceType': serviceType,
-            'unblendedCost': unblendedCost,
-            'usageQuantity': usageQuantity
-        }
-        table.put_item(
-            Item=item
-        )
-        items.append(item)
-        billItem = billItem + 1
-
+        pass
     # creting S3 bucket: storageforbills
     jsonForStorage = json.dumps(items)
     s3Client = boto3.client('s3')
