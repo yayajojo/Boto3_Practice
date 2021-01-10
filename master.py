@@ -20,26 +20,29 @@ def lambda_handler(event, context):
 
     # creating table bills for storing billData.
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.create_table(
-        TableName='bills',
-        KeySchema=[
-            {
-                'AttributeName': 'billItemID',
-                'KeyType': 'HASH'
-            }],
+    try:
+        table = dynamodb.create_table(
+            TableName='bills',
+            KeySchema=[
+                {
+                    'AttributeName': 'billItemID',
+                    'KeyType': 'HASH'
+                }],
 
-        AttributeDefinitions=[
-            {
-                'AttributeName': 'billItemID',
-                'AttributeType': 'N'
-            }],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'billItemID',
+                    'AttributeType': 'N'
+                }],
 
-        ProvisionedThroughput={
-            'ReadCapacityUnits': 5,
-            'WriteCapacityUnits': 5
-        }
-    )
-    table.meta.client.get_waiter('table_exists').wait(TableName='bills')
+            ProvisionedThroughput={
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        )
+        table.meta.client.get_waiter('table_exists').wait(TableName='bills')
+    except dynamodb.exceptions.ResourceInUseException:
+        table = dynamodb.Table('bills')
     
     # putting items in the bills table
     startDate = billData['ResultsByTime'][0]['TimePeriod']['Start']
@@ -66,29 +69,29 @@ def lambda_handler(event, context):
         )
         items.append(item)
         billItem = billItem + 1
-    
+
     # creting S3 bucket: storageforbills
     jsonForStorage = json.dumps(items)
     s3Client = boto3.client('s3')
     s3Client.create_bucket(Bucket='storageforbills')
-    
+
     # creating uncompressed bill.json and storing it in the bucket:storageforbills
     s3Client.put_object(
-            ACL='private',
-            Body=jsonForStorage,
-            Key='bill.json',
-            Bucket='storageforbills')
-            
-    # compressing jsonForStorage and storing it in the storageforbills bucket
+        ACL='private',
+        Body=jsonForStorage,
+        Key='bill.json',
+        Bucket='storageforbills')
+
+    # compressing jsonForStorage by zip and storing it in the storageforbills bucket
     gzip.compress(jsonForStorage.encode('utf-8'))
     s3Client.put_object(
-            ACL='private',
-            Body=jsonForStorage,
-            Key='compressedbill.json',
-            Bucket='storageforbills')
+        ACL='private',
+        Body=jsonForStorage,
+        Key='compressedbill.json',
+        Bucket='storageforbills')
     presignedUrl = s3Client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': 'storageforbills',
-                    'Key': 'compressedbill.json'},
-            ExpiresIn=172800)
+        'get_object',
+        Params={'Bucket': 'storageforbills',
+                'Key': 'compressedbill.json'},
+        ExpiresIn=172800)
     print(presignedUrl)
