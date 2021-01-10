@@ -8,7 +8,9 @@ import boto3
 def lambda_handler(event, context):
     # TODO implement
     billClient = boto3.client('ce')
+    # first step: 
     # connecting to cost explorer to get monthly(December) aws usage
+    # try/exception: if exception:raise error
     try:
         billData = billClient.get_cost_and_usage(
             TimePeriod={
@@ -21,11 +23,15 @@ def lambda_handler(event, context):
                      {'Type': 'DIMENSION', 'Key': 'USAGE_TYPE'}]
         )
     except botocore.exceptions.ClientError as error:
+        print("someting wrong when fetching cost and uasge")
         raise error
     # creating table(bills) for storing billData.
     dynamodbClient = boto3.client('dynamodb')
-    # creating table if table(bills) does not exists,otherwise
-    # using existing table(bills)
+    # second step:
+    # putting bill data into table(bills)
+    # try/exception: creating table if table(bills) does not exist,
+    # otherwise using existing table(bills),
+    # otherwise raise error
     try:
         table = dynamodbClient.create_table(
             TableName='bills',
@@ -50,7 +56,10 @@ def lambda_handler(event, context):
     except dynamodbClient.exceptions.ResourceInUseException:
         dynamodbDB = boto3.resource('dynamodb')
         table = dynamodbDB.Table('bills')
-            # putting items in the table(bills)
+    except botocore.exceptions.ClientError as error:
+        print("something wrong")
+        raise error
+    # putting billData items into the table(bills)
     startDate = billData['ResultsByTime'][0]['TimePeriod']['Start']
     endDate = billData['ResultsByTime'][0]['TimePeriod']['End']
     services = billData['ResultsByTime'][0]['Groups']
@@ -75,11 +84,20 @@ def lambda_handler(event, context):
         )
         items.append(item)
         billItem = billItem + 1
+    # third step:
     # creting S3 bucket: storageforbills
-    jsonForStorage = json.dumps(items)
+    # try/exception: creating bucket if bucket does not exist, 
+    # otherwise using existing bucket,
+    # otherwise raise error
     s3Client = boto3.client('s3')
-    s3Client.create_bucket(Bucket='storageforbills')
-
+    try:
+        jsonForStorage = json.dumps(items)
+        s3Client.create_bucket(Bucket='storageforbills')
+    except s3Client.exceptions.BucketAlreadyExists:
+        pass
+    except botocore.exceptions.ClientError as error:
+        print("someting wrong when using bucket")
+        raise error
     # creating uncompressed bill.json and storing it in the bucket:storageforbills
     s3Client.put_object(
         ACL='private',
