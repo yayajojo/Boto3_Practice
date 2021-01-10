@@ -3,6 +3,8 @@ import json
 import gzip
 import botocore
 import boto3
+import zipfile
+import os
 
 
 def lambda_handler(event, context):
@@ -98,23 +100,29 @@ def lambda_handler(event, context):
     except botocore.exceptions.ClientError as error:
         print("someting wrong when using bucket")
         raise error
+    # fourth step:
     # creating uncompressed bill.json and storing it in the bucket:storageforbills
-    s3Client.put_object(
-        ACL='private',
-        Body=jsonForStorage,
-        Key='bill.json',
-        Bucket='storageforbills')
-
-    # compressing jsonForStorage by zip and storing it in the storageforbills bucket
     gzip.compress(jsonForStorage.encode('utf-8'))
     s3Client.put_object(
         ACL='private',
         Body=jsonForStorage,
-        Key='compressedbill.json',
+        Key='bills.json',
         Bucket='storageforbills')
+    # fifth step:
+    # compressing jsonForStorage by zip and storing it in the storageforbills bucket
+    with open(os.path.join('/tmp','bills.json'), 'wb') as f:
+        s3Client.download_fileobj('storageforbills', 'bills.json', f)
+    with zipfile.ZipFile(os.path.join('/tmp','bills.zip'), 'w', compression=zipfile.ZIP_DEFLATED) as my_zip:
+            my_zip.write(os.path.join('/tmp','bills.json'))
+    s3Client.upload_file(
+        os.path.join('/tmp','bills.zip'),
+       'storageforbills',
+       'bills.zip')
+    # sixth step:
+    # creating presigned_url whose duration is 2 day(172800 sec)
     presignedUrl = s3Client.generate_presigned_url(
         'get_object',
         Params={'Bucket': 'storageforbills',
-                'Key': 'compressedbill.json'},
+                'Key': 'bills.zip'},
         ExpiresIn=172800)
     print(presignedUrl)
