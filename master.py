@@ -12,8 +12,8 @@ def lambda_handler(event, context):
     # connecting to cost explorer to get monthly(December) aws usage
     # try/exception: if exception, print and log error message
 
+    bill_client = boto3.client('ce')
     try:
-        bill_client = boto3.client('ce')
         bill_data = bill_client.get_cost_and_usage(
             TimePeriod={'Start': '2020-12-01', 'End': '2021-01-01'},
             Granularity='MONTHLY',
