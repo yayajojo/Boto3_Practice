@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 def lambda_handler(event, context):
     # first step:
     # connecting to cost explorer to get monthly(December) aws usage
-    # try/exception: if exception, print error message
+    # try/exception: if exception, print and log error message
 
     try:
         bill_client = boto3.client('ce')
@@ -29,7 +29,7 @@ def lambda_handler(event, context):
     # creating table(bills) and storing bill data into it
     # try/exception: creating table if table(bills) does not exist,
     # otherwise using the existing table(bills),
-    # otherwise print error message
+    # otherwise print and log error message
 
     dynamodb_client = boto3.client('dynamodb')
     try:
@@ -87,7 +87,7 @@ def lambda_handler(event, context):
     # creting S3 bucket: storageforbills
     # try/exception: creating bucket if bucket does not exist,
     # otherwise using existing bucket,
-    # otherwise print error message
+    # otherwise print anf log error message
 
     s3_client = boto3.client('s3')
     try:
@@ -100,7 +100,7 @@ def lambda_handler(event, context):
 
     # fourth step:
     # creating unzipped bills.json and storing it in the bucket:storageforbills
-    # try/exception: uploadung bills.json, if error happens, log error
+    # try/exception: uploadung bills.json, if error happens, print and log error
 
     bill_items_json = json.dumps(bill_items)
     gzip.compress(bill_items_json.encode('utf-8'))
@@ -116,7 +116,7 @@ def lambda_handler(event, context):
 
     # fifth step:
     # zipping bills.json and storing it in the storageforbills bucket
-    # try/exception: uploadung bills.zip, if error happens, log error
+    # try/exception: uploadung bills.zip, if error happens, print and log error
 
     with open(os.path.join('/tmp', 'bills.json'), 'wb') as f:
         s3_client.download_fileobj('storageforbills', 'bills.json', f)
@@ -133,6 +133,8 @@ def lambda_handler(event, context):
 
     # sixth step:
     # creating presigned_url whose duration is 2 days(172800 seconds)
+    # try/exception: uploadung bills.zip, if error happens, print and log error
+
     try:
         presigned_url = s3_client.generate_presigned_url(
             'get_object',
